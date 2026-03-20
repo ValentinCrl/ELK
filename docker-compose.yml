@@ -45,12 +45,12 @@ services:
     ports:
       - "5002:5000"
     depends_on:
-      - postgres
+      - db
     networks:
       - observability
 
 
-  postgres:
+  db:
     image: postgres:15
     container_name: postgres
     environment:
@@ -58,6 +58,11 @@ services:
       - DB_NAME=postgres
       - DB_USER=postgres
       - DB_PASSWORD=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=postgresql
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
     ports:
       - "5432:5432"
     volumes:
@@ -87,7 +92,7 @@ services:
       - ./python_apps/logs:/var/log/apps
     depends_on:
       - server
-      - postgres
+      - db
     networks:
       - observability
 
@@ -128,3 +133,5 @@ networks:
 
 volumes:
   esdata:
+  postgres_data:
+
