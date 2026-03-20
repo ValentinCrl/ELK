@@ -43,7 +43,38 @@ services:
     volumes:
       - ./python_apps/logs:/var/log/apps
     ports:
-      - "5002:5002"
+      - "5002:5000"
+    depends_on:
+      - db
+    networks:
+      - observability
+
+
+  db:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      - DB_HOST=db 
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=postgresql
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U observability_user -d observability_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - observability
+
 
   client:
     build:
@@ -61,6 +92,9 @@ services:
       - ./python_apps/logs:/var/log/apps
     depends_on:
       - server
+      - db
+    networks:
+      - observability
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION:-8.19.11}
@@ -78,23 +112,8 @@ services:
       interval: 15s
       timeout: 10s
       retries: 20
-
-  logstash:
-    image: docker.elastic.co/logstash/logstash:${STACK_VERSION:-8.19.11}
-    container_name: elk-logstash
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    environment:
-      - LS_JAVA_OPTS=-Xms256m -Xmx256m
-    ports:
-      - "5044:5044"
-      - "5001:5000"
-    volumes:
-      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
-      - ./logs:/var/log/demo:ro
-      - ./log_analysed:/var/log/analysed:ro
-      - ./python_apps/logs:/var/log/apps:ro
+    networks:
+      - observability
 
   kibana:
     image: docker.elastic.co/kibana/kibana:${STACK_VERSION:-8.19.11}
@@ -115,4 +134,3 @@ networks:
 volumes:
   esdata:
   postgres_data:
-
