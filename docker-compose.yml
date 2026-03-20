@@ -7,10 +7,15 @@ services:
     environment:
       - SERVICE_NAME=server
       - LOG_FILE=/var/log/apps/server.log
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=api-server
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
     volumes:
       - ./python_apps/logs:/var/log/apps
     ports:
       - "5002:5000"
+    networks:
+      - observability
 
   client:
     build:
@@ -21,10 +26,15 @@ services:
       - SERVER_URL=http://server:5000
       - SERVICE_NAME=client
       - LOG_FILE=/var/log/apps/client.log
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=api-client
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
     volumes:
       - ./python_apps/logs:/var/log/apps
     depends_on:
       - server
+    networks:
+      - observability
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION:-8.19.11}
@@ -42,6 +52,8 @@ services:
       interval: 15s
       timeout: 10s
       retries: 20
+    networks:
+      - observability
 
   logstash:
     image: docker.elastic.co/logstash/logstash:${STACK_VERSION:-8.19.11}
@@ -59,6 +71,18 @@ services:
       - ./logs:/var/log/demo:ro
       - ./log_analysed:/var/log/analysed:ro
       - ./python_apps/logs:/var/log/apps:ro
+    networks:
+      - observability
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: jaeger
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+    networks:
+      - observability
+
 
   kibana:
     image: docker.elastic.co/kibana/kibana:${STACK_VERSION:-8.19.11}
@@ -70,6 +94,11 @@ services:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     ports:
       - "5601:5601"
+    networks:
+      - observability
+
+networks:
+  observability:
 
 volumes:
   esdata:
