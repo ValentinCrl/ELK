@@ -1,59 +1,4 @@
 services:
-  server:
-    build:
-      context: ./python_apps_with_db/server
-      dockerfile: Dockerfile
-    container_name: demo-server
-    environment:
-      - SERVICE_NAME=server
-      - LOG_FILE=/var/log/apps/server.log
-      - OTEL_RESOURCE_ATTRIBUTES=service.name=api-server
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-    volumes:
-      - ./python_apps/logs:/var/log/apps
-    ports:
-      - "5002:5000"
-    networks:
-      - observability
-
-  client:
-    build:
-      context: ./python_apps_with_db/client
-      dockerfile: Dockerfile
-    container_name: demo-client
-    environment:
-      - SERVER_URL=http://server:5000
-      - SERVICE_NAME=client
-      - LOG_FILE=/var/log/apps/client.log
-      - OTEL_RESOURCE_ATTRIBUTES=service.name=api-client
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-    volumes:
-      - ./python_apps/logs:/var/log/apps
-    depends_on:
-      - server
-    networks:
-      - observability
-
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION:-8.19.11}
-    container_name: elk-elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
-    ports:
-      - "9200:9200"
-    volumes:
-      - esdata:/usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 20
-    networks:
-      - observability
 
   logstash:
     image: docker.elastic.co/logstash/logstash:${STACK_VERSION:-8.19.11}
@@ -83,6 +28,87 @@ services:
     networks:
       - observability
 
+
+  server:
+    build:
+      context: ./python_apps_with_db/server
+      dockerfile: Dockerfile
+    container_name: demo-server
+    environment:
+      - SERVICE_NAME=server
+      - LOG_FILE=/var/log/apps/server.log
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=api-server
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+    volumes:
+      - ./python_apps/logs:/var/log/apps
+    ports:
+      - "5002:5000"
+    depends_on:
+      - postgres
+    networks:
+      - observability
+
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      - DB_HOST=db 
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U observability_user -d observability_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - observability
+
+
+  client:
+    build:
+      context: ./python_apps_with_db/client
+      dockerfile: Dockerfile
+    container_name: demo-client
+    environment:
+      - SERVER_URL=http://server:5000
+      - SERVICE_NAME=client
+      - LOG_FILE=/var/log/apps/client.log
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=api-client
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+    volumes:
+      - ./python_apps/logs:/var/log/apps
+    depends_on:
+      - server
+      - postgres
+    networks:
+      - observability
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION:-8.19.11}
+    container_name: elk-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+    networks:
+      - observability
 
   kibana:
     image: docker.elastic.co/kibana/kibana:${STACK_VERSION:-8.19.11}
