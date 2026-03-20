@@ -1,0 +1,75 @@
+services:
+  server:
+    build:
+      context: ./python_apps/server
+      dockerfile: Dockerfile
+    container_name: demo-server
+    environment:
+      - SERVICE_NAME=server
+      - LOG_FILE=/var/log/apps/server.log
+    volumes:
+      - ./python_apps/logs:/var/log/apps
+    ports:
+      - "5002:5002"
+
+  client:
+    build:
+      context: ./python_apps/client
+      dockerfile: Dockerfile
+    container_name: demo-client
+    environment:
+      - SERVER_URL=http://server:5002
+      - SERVICE_NAME=client
+      - LOG_FILE=/var/log/apps/client.log
+    volumes:
+      - ./python_apps/logs:/var/log/apps
+    depends_on:
+      - server
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION:-8.19.11}
+    container_name: elk-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:${STACK_VERSION:-8.19.11}
+    container_name: elk-logstash
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - LS_JAVA_OPTS=-Xms256m -Xmx256m
+    ports:
+      - "5044:5044"
+      - "5001:5000"
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./logs:/var/log/demo:ro
+      - ./log_analysed:/var/log/analysed:ro
+      - ./python_apps/logs:/var/log/apps:ro
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${STACK_VERSION:-8.19.11}
+    container_name: elk-kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+
+volumes:
+  esdata:
