@@ -1,7 +1,7 @@
 services:
   server:
     build:
-      context: ./python_apps/server
+      context: ./python_apps_with_db/server
       dockerfile: Dockerfile
     container_name: demo-server
     environment:
@@ -19,7 +19,7 @@ services:
 
   client:
     build:
-      context: ./python_apps/client
+      context: ./python_apps_with_db/client
       dockerfile: Dockerfile
     container_name: demo-client
     environment:
